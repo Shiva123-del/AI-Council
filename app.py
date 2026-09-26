@@ -397,7 +397,7 @@ def avatar_svg(agent: Agent, blink_delay: float) -> str:
     L = agent.look
     x = set(L.get("extras", ()))
     skin, shade, hair = L["skin"], L["shade"], L["hair"]
-    p = [f'<svg class="avatar" viewBox="0 0 120 140" aria-hidden="true" '
+    p = [f'<svg class="avatar" viewBox="0 0 120 140" width="118" height="138" aria-hidden="true" '
          f'style="--blink-delay:{blink_delay}s">']
 
     # torso / clothing
@@ -737,6 +737,13 @@ def stop(sid):
 
 COUNCIL_JS = r"""
 () => {
+  // Make sure the council styling is on the page, however the app was launched.
+  if (!document.getElementById('council-css')) {
+    const st = document.createElement('style');
+    st.id = 'council-css';
+    st.textContent = __COUNCIL_CSS__;
+    document.head.appendChild(st);
+  }
   if (window.__council) return;
   const C = window.__council = { audio: null, url: null, raf: 0, watch: 0, token: null,
                                  unlocked: false, seen: new Set() };
@@ -1045,16 +1052,16 @@ body, .gradio-container {
 }
 .table-area {
   max-width: 1250px; margin: 0 auto; display: grid;
-  grid-template-columns: minmax(250px, 320px) minmax(300px, 1fr) minmax(250px, 320px);
-  grid-template-areas: "researcher table expert" ". analyst .";
-  gap: 26px 30px; align-items: center; justify-content: center;
+  grid-template-columns: minmax(200px, 320px) minmax(170px, 1fr) minmax(200px, 320px);
+  grid-template-areas: "researcher table expert" "analyst analyst analyst";
+  gap: 26px clamp(12px, 2.2vw, 30px); align-items: center; justify-content: center;
 }
 .researcher-position { grid-area: researcher; }
 .expert-position { grid-area: expert; }
-.analyst-position { grid-area: analyst; justify-self: center; width: 100%; max-width: 360px; }
+.analyst-position { grid-area: analyst; justify-self: center; width: 100%; max-width: 360px; min-width: 0; }
 
 /* ---------- table ---------- */
-.table-wrap { grid-area: table; position: relative; height: 290px; display: flex; align-items: center; justify-content: center; }
+.table-wrap { grid-area: table; position: relative; height: clamp(170px, 22vw, 290px); display: flex; align-items: center; justify-content: center; }
 .round-table {
   position: relative; width: 100%; max-width: 580px; height: 100%; border-radius: 50%;
   background:
@@ -1077,8 +1084,9 @@ body, .gradio-container {
                     0 30px 60px rgba(0,0,0,.55); }
 }
 .table-emblem { font-size: 26px; color: color-mix(in srgb, var(--active-color) 70%, #fff); }
-.table-center { font-size: 17px; letter-spacing: 6px; color: #8a95c2; font-weight: 800; margin-top: 4px; }
+.table-center { font-size: clamp(12px, 1.3vw, 17px); letter-spacing: clamp(3px, .45vw, 6px); color: #8a95c2; font-weight: 800; margin-top: 4px; white-space: nowrap; }
 .table-sub { font-size: 9px; letter-spacing: 3px; color: #59628a; margin-top: 6px; }
+@media (min-width: 721px) and (max-width: 1100px) { .table-sub { display: none; } }
 .table-glow { position: absolute; inset: -22px; border-radius: 50%; border: 1px solid rgba(59,167,255,.14); }
 
 /* ---------- agent card ---------- */
@@ -1203,7 +1211,8 @@ body, .gradio-container {
 .decision-buttons button { min-width: 230px; font-weight: 800 !important; letter-spacing: 1.5px; }
 
 /* ---------- responsive ---------- */
-@media (max-width: 900px) {
+@media (max-width: 720px) {
+  /* Phones / narrow windows: cards stack, and the round table sits on top as a compact banner. */
   .council-room { padding: 18px 12px 28px; display: flex; flex-direction: column; }
   .judge-area { order: 5; margin: 26px auto 0 !important; }   /* judge speaks last, so sits last */
   .final-decision { order: 6; }
@@ -1211,7 +1220,9 @@ body, .gradio-container {
   .subtitle { font-size: 9px; letter-spacing: 2px; }
   .question-text { font-size: 16px; }
   .table-area { display: flex; flex-direction: column; align-items: center; gap: 26px; }
-  .table-wrap, .judge-line { display: none; }
+  .table-wrap { order: -1; width: 100%; max-width: 420px; height: 130px; }
+  .table-center { font-size: 14px; letter-spacing: 5px; }
+  .judge-line { display: none; }
   .researcher-position, .expert-position, .analyst-position, .judge-area { width: 100%; max-width: 420px; }
   .decision-buttons { flex-direction: column; align-items: center; }
 }
@@ -1226,6 +1237,9 @@ body, .gradio-container {
 # =========================================================
 
 # Gradio 6 moved css/js from Blocks() to launch(); support both.
+import json  # noqa: E402
+
+COUNCIL_JS = COUNCIL_JS.replace("__COUNCIL_CSS__", json.dumps(CSS))
 _GRADIO_6 = int(gr.__version__.split(".")[0]) >= 6
 _ASSETS = {"css": CSS, "js": COUNCIL_JS}
 
@@ -1271,10 +1285,17 @@ with gr.Blocks(title="AI Council", **({} if _GRADIO_6 else _ASSETS)) as demo:
     verdict_button.click(choose_verdict, [session_id], views, show_progress="hidden")
     stop_button.click(stop, [session_id], views, show_progress="hidden")
 
+    # Also run the browser script on page load. This works on every Gradio version and
+    # every launch method (python app.py, gradio app.py, Hugging Face Spaces, ...).
+    demo.load(None, None, None, js=COUNCIL_JS)
+
 demo.queue(default_concurrency_limit=32)
 
 if __name__ == "__main__":
     demo.launch(
-    server_name="0.0.0.0",
-    server_port=int(os.environ.get("PORT", 7860))
-)
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860)),
+        # Gradio 6 takes the page styling and browser script here - without them the
+        # layout, avatars, voice playback and synced captions all break.
+        **(_ASSETS if _GRADIO_6 else {}),
+    )
