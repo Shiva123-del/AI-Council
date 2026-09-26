@@ -1274,4 +1274,7 @@ with gr.Blocks(title="AI Council", **({} if _GRADIO_6 else _ASSETS)) as demo:
 demo.queue(default_concurrency_limit=32)
 
 if __name__ == "__main__":
-    demo.launch(**(_ASSETS if _GRADIO_6 else {}))
+    demo.launch(
+    server_name="0.0.0.0",
+    server_port=int(os.environ.get("PORT", 7860))
+)
